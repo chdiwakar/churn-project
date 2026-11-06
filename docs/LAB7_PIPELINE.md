@@ -1,58 +1,36 @@
-\# LAB 7: Churn Prediction MLOps Pipeline
+# Lab 7 — ML Pipeline Engineering
 
+Lab 7 builds the core churn prediction ML pipeline.
 
+Normal stages introduced in Lab 7:
 
-\## 1. Objective
+```text
+01 Load Data
+02 Raw Data Validation
+03 Preprocessing
+04 Processed Output Validation
+05 Training + MLflow + Model Registry
+06 Model Evaluation
+08 Automated Model Lifecycle
+09 Production Inference
+```
 
-To develop a reproducible machine learning pipeline for customer churn prediction.
+Lab 8 later inserts `07_quality_gate.py` between evaluation and lifecycle.
 
+Run the pipeline after the Lab 7 stages are implemented:
 
+```bash
+python src/mlops_pipeline/churn_prediction_pipeline.py
+```
 
-\## 2. Pipeline Steps
+Training uses one Random Forest trained on the full training split. Evaluation is done on the held-out test split using accuracy, precision, recall, F1 and ROC-AUC. MLflow records the parameters and metrics and registers each trained model under:
 
-1\. Load the raw churn dataset.
+```text
+Telco_Churn_Production_Model
+```
 
-2\. Validate the input data.
+The lifecycle uses the course-friendly stages:
 
-3\. Preprocess numerical and categorical features.
-
-4\. Split the dataset into training and testing sets.
-
-5\. Train a Random Forest classification model.
-
-6\. Track experiments and register the model using MLflow.
-
-7\. Evaluate model performance.
-
-8\. Apply a model quality gate.
-
-9\. Automate the model lifecycle.
-
-10\. Generate predictions on new data.
-
-
-
-\## 3. Tools and Technologies
-
-\- Python
-
-\- Pandas and NumPy
-
-\- Scikit-learn
-
-\- MLflow
-
-\- Git and GitHub
-
-
-
-\## 4. Output Artifacts
-
-The pipeline generates processed datasets, preprocessing and model files, evaluation reports, quality-gate results, and inference predictions.
-
-
-
-\## 5. Conclusion
-
-The pipeline automates the main stages of churn prediction and supports reproducibility, model tracking, evaluation, and inference.
-
+```text
+None → Staging → Production / Archived
+```

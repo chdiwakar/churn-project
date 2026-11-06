@@ -20,7 +20,7 @@ from sklearn.metrics import (
 def train_and_track(run_name="RandomForest_Baseline", params=None):
     if params is None:
         params = {
-            "n_estimators": 150,
+            "n_estimators": 100,
             "max_depth": 10,
             "random_state": 42,
             "class_weight": "balanced"
@@ -99,7 +99,7 @@ from sklearn.linear_model import LogisticRegression
 
 if __name__ == "__main__":
     # Baseline Run1
-    train_and_track(run_name="RandomForest")
+    train_and_track(run_name="RandomForest_KNN_Imputation")
 
     # run2
     # tuned_params = {

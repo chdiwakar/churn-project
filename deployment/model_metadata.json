@@ -1,0 +1,10 @@
+{
+    "model_name": "Telco_Churn_Production_Model",
+    "model_version": "1",
+    "model_stage": "Production",
+    "run_id": "3554e0aee2b64734a32e88a4f1aeadbb",
+    "model_source": "models:/m-c51c5a2539584d65bdc4d3fe95046c83",
+    "model_id": "m-c51c5a2539584d65bdc4d3fe95046c83",
+    "preprocessor_artifact": "preprocessing_pipeline/preprocessor.pkl",
+    "source": "MLflow"
+}

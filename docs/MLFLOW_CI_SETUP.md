@@ -1,52 +1,34 @@
-\# MLflow CI Setup
+# MLflow Tracking for Labs 7–9
 
+The project reads the MLflow Tracking URI from:
 
+1. `MLFLOW_TRACKING_URI` environment variable, or
+2. `mlflow.tracking_uri` in `config.yaml`.
 
-\## 1. Objective
+For local development, leave the URI empty and MLflow can use local tracking storage.
 
-To configure MLflow experiment tracking and model registration for the Churn Prediction MLOps project.
+For persistent CI experiment history, point `MLFLOW_TRACKING_URI` to a persistent MLflow Tracking Server and store that value as the GitHub Actions secret:
 
+```text
+MLFLOW_TRACKING_URI
+```
 
+Example local server:
 
-\## 2. Configuration
+```bash
+mlflow server --backend-store-uri sqlite:///mlflow.db --host 127.0.0.1 --port 5000
+```
 
-The project uses `config.yaml` to configure MLflow tracking and the experiment name.
+PowerShell:
 
+```powershell
+$env:MLFLOW_TRACKING_URI="http://127.0.0.1:5000"
+```
 
+Linux/macOS:
 
-\- Tracking URI: `sqlite:///mlflow.db`
+```bash
+export MLFLOW_TRACKING_URI=http://127.0.0.1:5000
+```
 
-\- Experiment name: `Telco\_Churn\_Prediction`
-
-\- Registered model: `Telco\_Churn\_Production\_Model`
-
-
-
-\## 3. Model Training and Tracking
-
-The training pipeline trains a Random Forest classifier, records evaluation metrics, logs model artifacts, and registers the trained model through MLflow.
-
-
-
-\## 4. Continuous Integration
-
-GitHub Actions checks out the repository, sets up Python, installs dependencies, and executes the configured Lab 9 failure-handling tests.
-
-
-
-\## 5. Important Notes
-
-\- Keep database backup files out of Git.
-
-\- Install project dependencies using `requirements.txt`.
-
-\- Keep configuration values consistent with the pipeline code.
-
-\- MLflow database files generated locally do not need to be committed.
-
-
-
-\## 6. Conclusion
-
-MLflow supports experiment tracking and model registration, while GitHub Actions automates project checks.
-
+A GitHub-hosted runner cannot reach a server running only on your laptop. For CI, use an externally reachable Tracking Server or a suitable self-hosted runner.

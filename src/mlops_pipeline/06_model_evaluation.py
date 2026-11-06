@@ -25,14 +25,14 @@ def run_evaluation():
     processed_dir = config["data"]["processed_dir"]
 
     if not os.path.exists(model_path):
-        print(f"[ERROR] Model not found at {model_path}. Run 05_train_registry_mlops.py first.")
+        print(f"[ERROR] Model not found at {model_path}. Run 05_train_registry.py first.")
         return False
 
     try:
         X_test = np.load(os.path.join(processed_dir, "X_test_final.npy"))
         y_test = np.load(os.path.join(processed_dir, "y_test.npy"))
     except FileNotFoundError:
-        print("[ERROR] Test data not found. Run 03_preprocessing_mlops.py first.")
+        print("[ERROR] Test data not found. Run 03_preprocessing.py first.")
         return False
 
     model = joblib.load(model_path)

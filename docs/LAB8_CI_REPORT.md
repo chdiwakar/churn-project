@@ -1,50 +1,67 @@
-\# LAB 8: Continuous Integration Report
+# Lab 8 — Pipeline Automation and CI Workflows
 
+## Goal
 
+Automate the normal Churn Prediction MLOps pipeline with GitHub Actions. Lab 8 does not create a second ML pipeline; it automatically executes the Lab 7 pipeline when relevant repository changes occur.
 
-\## 1. Objective
+## CI flow
 
-To automate validation and testing of the Churn Prediction MLOps project using GitHub Actions.
+```text
+Git push / pull request / manual trigger
+                ↓
+        install dependencies
+                ↓
+churn_prediction_pipeline.py
+                ↓
+01 → 02 → 03 → 04 → 05 → 06 → 07 → 08 → 09
+                ↓
+        upload reports/artifacts
+```
 
+## Triggered changes
 
+- `config.yaml`
+- `src/mlops_pipeline/**`
+- `requirements.txt`
+- `data/raw/churn.csv`
+- the CI workflow itself
 
-\## 2. Continuous Integration Workflow
+## Repeated run demonstration
 
-The GitHub Actions workflow performs the following tasks:
+Change a model parameter in `config.yaml`, push the change, and observe a new MLflow run in:
 
+```text
+churn_prediction_model_training_lab7
+```
 
+Example:
 
-1\. Checks out the repository.
+```text
+Run 1 → n_estimators=150
+Run 2 → n_estimators=200
+Run 3 → max_depth=8
+```
 
-2\. Sets up the Python environment.
+## Quality gate
 
-3\. Installs project dependencies.
+```yaml
+quality_gate:
+  metric: recall
+  minimum_value: 0.70
+```
 
-4\. Verifies required project files.
+If the metric is below the threshold, the pipeline exits before lifecycle promotion.
 
-5\. Executes the configured validation and testing steps.
+## Jenkins comparison
 
+| Feature | GitHub Actions | Jenkins |
+|---|---|---|
+| Repository integration | Native to GitHub | Requires integration |
+| Workflow definition | YAML | Jenkinsfile / UI |
+| Hosted runners | Available | Normally self-managed |
+| Setup for this lab | Simple | More infrastructure |
+| Use in this project | Implemented | Compared conceptually |
 
+## MLflow note
 
-\## 3. Tools Used
-
-\- Git and GitHub
-
-\- GitHub Actions
-
-\- Python
-
-\- Project requirements.txt
-
-
-
-\## 4. Results
-
-The Lab 9 Failure Handling Tests workflow completed successfully. This confirms that the configured Lab 9 workflow executed successfully for that run.
-
-
-
-\## 5. Conclusion
-
-Continuous integration helps automate project checks and detect issues early during development.
-
+For CI runs to share one experiment history across temporary GitHub runners, set the GitHub Actions secret `MLFLOW_TRACKING_URI` to a persistent MLflow Tracking Server. See `MLFLOW_CI_SETUP.md`.

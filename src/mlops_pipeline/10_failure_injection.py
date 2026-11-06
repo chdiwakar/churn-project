@@ -1,280 +1,349 @@
-import os
 import json
+import os
 import shutil
+import subprocess
+import sys
+from pathlib import Path
+
+import joblib
+import mlflow
+import mlflow.sklearn
+import numpy as np
 import pandas as pd
 import yaml
 
 
-# ---------------------------------------------------------
-# Load configuration
-# ---------------------------------------------------------
-with open("config.yaml", "r", encoding="utf-8") as f:
-    config = yaml.safe_load(f)
+# Project root:
+# churn-prediction/
+# ├── src/
+# │   └── mlops_pipeline/
+# │       └── 10_failure_injection.py
+PROJECT_ROOT = Path(__file__).resolve().parents[2]
 
 
-RAW_DATA = config["data"]["raw_path"]
+def configure_mlflow(config):
+    tracking_uri = (
+        os.getenv("MLFLOW_TRACKING_URI")
+        or config["mlflow"].get("tracking_uri")
+    )
 
-ARTIFACTS_DIR = "artifacts"
-REPORTS_DIR = "reports"
-
-FAILURE_REPORT = os.path.join(
-    ARTIFACTS_DIR,
-    "failure_simulation_report.json"
-)
-
-CORRUPTED_REPORT = os.path.join(
-    ARTIFACTS_DIR,
-    "corrupted_simulation_errors.csv"
-)
+    if tracking_uri:
+        mlflow.set_tracking_uri(tracking_uri)
 
 
-os.makedirs(ARTIFACTS_DIR, exist_ok=True)
-os.makedirs(REPORTS_DIR, exist_ok=True)
+def run_script(script_path):
+    """
+    Run another project script using an absolute path.
+    """
+    script = PROJECT_ROOT / script_path
+
+    result = subprocess.run(
+        [sys.executable, str(script)],
+        cwd=PROJECT_ROOT
+    )
+
+    return result.returncode
 
 
-# ---------------------------------------------------------
-# Failure Injection
-# ---------------------------------------------------------
-def inject_failures():
+def restore_file(backup_path, original_path):
+    if os.path.exists(original_path):
+        os.remove(original_path)
 
-    print("\n========== FAILURE INJECTION ==========")
+    os.replace(backup_path, original_path)
 
-    failures = []
-    errors = []
 
-    # -----------------------------------------------------
-    # Failure 1: Missing raw dataset
-    # -----------------------------------------------------
-    print("\n[TEST 1] Checking raw dataset availability...")
+def test_missing_data(config):
+    print("\n[LAB 9] Scenario 1: Missing data")
 
-    if not os.path.exists(RAW_DATA):
-        failures.append({
-            "failure_type": "Missing Raw Dataset",
-            "status": "DETECTED",
-            "message": f"Raw dataset not found: {RAW_DATA}"
-        })
+    data_path = PROJECT_ROOT / config["data"]["raw_path"]
+    backup_path = Path(str(data_path) + ".lab9_backup")
 
-        errors.append({
-            "test": "Missing Raw Dataset",
-            "expected": "Dataset should exist",
-            "result": "FAIL"
-        })
-
-        print("[PASS] Missing dataset failure detected.")
-    else:
-        print("[PASS] Raw dataset exists.")
-
-    # -----------------------------------------------------
-    # Failure 2: Invalid target column
-    # -----------------------------------------------------
-    print("\n[TEST 2] Checking target column...")
+    os.replace(data_path, backup_path)
 
     try:
-        df = pd.read_csv(RAW_DATA)
-
-        target_column = config["data"]["target_column"]
-
-        if target_column not in df.columns:
-
-            failures.append({
-                "failure_type": "Missing Target Column",
-                "status": "DETECTED",
-                "message": f"Target column '{target_column}' not found."
-            })
-
-            errors.append({
-                "test": "Missing Target Column",
-                "expected": target_column,
-                "result": "FAIL"
-            })
-
-            print("[PASS] Missing target-column failure detected.")
-
-        else:
-            print(
-                f"[PASS] Target column '{target_column}' exists."
-            )
-
-    except Exception as e:
-
-        failures.append({
-            "failure_type": "Dataset Read Failure",
-            "status": "DETECTED",
-            "message": str(e)
-        })
-
-        errors.append({
-            "test": "Dataset Read",
-            "expected": "CSV should load successfully",
-            "result": "FAIL"
-        })
-
-        print("[PASS] Dataset read failure detected.")
-
-    # -----------------------------------------------------
-    # Failure 3: Missing values
-    # -----------------------------------------------------
-    print("\n[TEST 3] Checking missing-value failure...")
-
-    try:
-        df = pd.read_csv(RAW_DATA)
-
-        missing_count = int(df.isnull().sum().sum())
-
-        if missing_count > 0:
-
-            failures.append({
-                "failure_type": "Missing Values",
-                "status": "DETECTED",
-                "message": f"{missing_count} missing values detected."
-            })
-
-            errors.append({
-                "test": "Missing Values",
-                "expected": 0,
-                "actual": missing_count,
-                "result": "FAIL"
-            })
-
-            print(
-                f"[PASS] Missing-value failure detected: "
-                f"{missing_count}"
-            )
-
-        else:
-            print("[PASS] No missing values found.")
-
-    except Exception as e:
-
-        print(f"[INFO] Missing-value test skipped: {e}")
-
-    # -----------------------------------------------------
-    # Failure 4: Invalid target values
-    # -----------------------------------------------------
-    print("\n[TEST 4] Checking target-value failure...")
-
-    try:
-        df = pd.read_csv(RAW_DATA)
-
-        target_column = config["data"]["target_column"]
-
-        if target_column in df.columns:
-
-            valid_values = {"Yes", "No", 1, 0, "1", "0"}
-
-            invalid_values = [
-                value
-                for value in df[target_column].dropna().unique()
-                if value not in valid_values
-            ]
-
-            if invalid_values:
-
-                failures.append({
-                    "failure_type": "Invalid Target Values",
-                    "status": "DETECTED",
-                    "message": (
-                        f"Invalid target values found: "
-                        f"{invalid_values}"
-                    )
-                })
-
-                errors.append({
-                    "test": "Invalid Target Values",
-                    "expected": ["Yes", "No"],
-                    "actual": invalid_values,
-                    "result": "FAIL"
-                })
-
-                print(
-                    "[PASS] Invalid target-value failure detected."
-                )
-
-            else:
-                print("[PASS] Target values are valid.")
-
-    except Exception as e:
-
-        print(f"[INFO] Target-value test skipped: {e}")
-
-    # -----------------------------------------------------
-    # Failure 5: Duplicate records
-    # -----------------------------------------------------
-    print("\n[TEST 5] Checking duplicate-record failure...")
-
-    try:
-        df = pd.read_csv(RAW_DATA)
-
-        duplicate_count = int(df.duplicated().sum())
-
-        if duplicate_count > 0:
-
-            failures.append({
-                "failure_type": "Duplicate Records",
-                "status": "DETECTED",
-                "message": (
-                    f"{duplicate_count} duplicate records found."
-                )
-            })
-
-            errors.append({
-                "test": "Duplicate Records",
-                "expected": 0,
-                "actual": duplicate_count,
-                "result": "FAIL"
-            })
-
-            print(
-                f"[PASS] Duplicate-record failure detected: "
-                f"{duplicate_count}"
-            )
-
-        else:
-            print("[PASS] No duplicate records found.")
-
-    except Exception as e:
-
-        print(f"[INFO] Duplicate test skipped: {e}")
-
-    # -----------------------------------------------------
-    # Save corrupted simulation errors
-    # -----------------------------------------------------
-    if errors:
-
-        error_df = pd.DataFrame(errors)
-
-        error_df.to_csv(
-            CORRUPTED_REPORT,
-            index=False
+        exit_code = run_script(
+            "src/mlops_pipeline/02_validate_data.py"
         )
 
-    else:
+        passed = exit_code != 0
 
-        pd.DataFrame(
-            columns=["test", "expected", "actual", "result"]
-        ).to_csv(
-            CORRUPTED_REPORT,
-            index=False
+        return {
+            "scenario": "missing_data",
+            "expected": "HALT",
+            "actual": "HALT" if passed else "CONTINUED",
+            "passed": passed
+        }
+
+    finally:
+        restore_file(backup_path, data_path)
+
+
+def test_invalid_datatype(config):
+    print("\n[LAB 9] Scenario 2: Invalid datatype")
+
+    data_path = PROJECT_ROOT / config["data"]["raw_path"]
+    backup_path = Path(str(data_path) + ".lab9_backup")
+
+    shutil.copy2(data_path, backup_path)
+
+    try:
+        df = pd.read_csv(data_path)
+
+        # Convert column to object first so pandas can store
+        # the invalid string without a dtype warning.
+        df["MonthlyCharges"] = df["MonthlyCharges"].astype(object)
+        df.loc[0, "MonthlyCharges"] = "INVALID_NUMBER"
+
+        df.to_csv(data_path, index=False)
+
+        exit_code = run_script(
+            "src/mlops_pipeline/02_validate_data.py"
         )
 
-    # -----------------------------------------------------
-    # Create failure simulation report
-    # -----------------------------------------------------
+        passed = exit_code != 0
+
+        return {
+            "scenario": "invalid_datatype",
+            "expected": "HALT",
+            "actual": "HALT" if passed else "CONTINUED",
+            "passed": passed
+        }
+
+    finally:
+        restore_file(backup_path, data_path)
+
+
+def test_schema_mismatch(config):
+    print("\n[LAB 9] Scenario 3: Schema mismatch")
+
+    data_path = PROJECT_ROOT / config["data"]["raw_path"]
+    backup_path = Path(str(data_path) + ".lab9_backup")
+
+    shutil.copy2(data_path, backup_path)
+
+    try:
+        df = pd.read_csv(data_path)
+
+        df = df.drop(columns=["Contract"])
+        df.to_csv(data_path, index=False)
+
+        exit_code = run_script(
+            "src/mlops_pipeline/02_validate_data.py"
+        )
+
+        passed = exit_code != 0
+
+        return {
+            "scenario": "schema_mismatch",
+            "expected": "HALT",
+            "actual": "HALT" if passed else "CONTINUED",
+            "passed": passed
+        }
+
+    finally:
+        restore_file(backup_path, data_path)
+
+
+def test_preprocessing_inconsistency(config):
+    print("\n[LAB 9] Scenario 4: Preprocessing inconsistency")
+
+    processed_dir = PROJECT_ROOT / config["data"]["processed_dir"]
+
+    path = processed_dir / "X_train_final.npy"
+    backup_path = Path(str(path) + ".lab9_backup")
+
+    if not path.exists():
+        print(
+            "[ERROR] Processed training output is missing. "
+            "Run the normal pipeline first."
+        )
+
+        return {
+            "scenario": "preprocessing_inconsistency",
+            "expected": "HALT",
+            "actual": "NOT_TESTED",
+            "passed": False
+        }
+
+    shutil.copy2(path, backup_path)
+
+    try:
+        X_train = np.load(path)
+
+        # Inject an invalid value.
+        X_train[0, 0] = np.nan
+
+        np.save(path, X_train)
+
+        exit_code = run_script(
+            "src/mlops_pipeline/04_validate_outputs.py"
+        )
+
+        passed = exit_code != 0
+
+        return {
+            "scenario": "preprocessing_inconsistency",
+            "expected": "HALT",
+            "actual": "HALT" if passed else "CONTINUED",
+            "passed": passed
+        }
+
+    finally:
+        restore_file(backup_path, path)
+
+
+def test_missing_model_with_recovery(config):
+    print("\n[LAB 9] Scenario 5: Missing model artifact + recovery")
+
+    model_path = PROJECT_ROOT / config["paths"]["model"]
+    model_name = config["registry"]["model_name"]
+
+    if not model_path.exists():
+        print(
+            "[ERROR] Local model is missing before the test. "
+            "Run the normal pipeline first."
+        )
+
+        return {
+            "scenario": "missing_model_artifact",
+            "expected": "RECOVER",
+            "actual": "NOT_TESTED",
+            "passed": False
+        }
+
+    backup_path = Path(str(model_path) + ".lab9_backup")
+
+    shutil.copy2(model_path, backup_path)
+    os.remove(model_path)
+
+    try:
+        # First confirm that evaluation fails because
+        # the local model is missing.
+        failure_exit_code = run_script(
+            "src/mlops_pipeline/06_model_evaluation.py"
+        )
+
+        failure_detected = failure_exit_code != 0
+
+        # Recover the Production model from MLflow.
+        configure_mlflow(config)
+
+        production_uri = (
+            f"models:/{model_name}/Production"
+        )
+
+        print(
+            f"[INFO] Recovering model from {production_uri}..."
+        )
+
+        production_model = mlflow.sklearn.load_model(
+            production_uri
+        )
+
+        model_path.parent.mkdir(
+            parents=True,
+            exist_ok=True
+        )
+
+        joblib.dump(
+            production_model,
+            model_path
+        )
+
+        # Run evaluation again after recovery.
+        recovery_exit_code = run_script(
+            "src/mlops_pipeline/06_model_evaluation.py"
+        )
+
+        recovered = recovery_exit_code == 0
+
+        return {
+            "scenario": "missing_model_artifact",
+            "expected": "RECOVER",
+            "actual": (
+                "RECOVERED"
+                if failure_detected and recovered
+                else "RECOVERY_FAILED"
+            ),
+            "failure_detected": failure_detected,
+            "recovery_succeeded": recovered,
+            "passed": failure_detected and recovered
+        }
+
+    finally:
+        restore_file(backup_path, model_path)
+
+
+def run_failure_tests():
+    print("[INFO] ==================================================")
+    print("[INFO] Failure Tests: Pipeline Failure Handling and Recovery")
+    print("[INFO] ==================================================")
+
+    config_path = PROJECT_ROOT / "config.yaml"
+
+    with open(config_path, "r", encoding="utf-8") as f:
+        config = yaml.safe_load(f)
+
+    repetitions = int(config["lab9"]["repetitions"])
+
+    all_runs = []
+
+    tests = [
+        test_missing_data,
+        test_invalid_datatype,
+        test_schema_mismatch,
+        test_preprocessing_inconsistency,
+        test_missing_model_with_recovery,
+    ]
+
+    for repetition in range(1, repetitions + 1):
+
+        print(
+            f"\n{'=' * 70}"
+            f"\n[INFO] Lab 9 Repetition "
+            f"{repetition}/{repetitions}"
+            f"\n{'=' * 70}"
+        )
+
+        repetition_results = []
+
+        for test in tests:
+            repetition_results.append(
+                test(config)
+            )
+
+        all_runs.append(    
+            {
+                "repetition": repetition,
+                "results": repetition_results,
+                "passed": all(
+                    item["passed"]
+                    for item in repetition_results
+                )
+            }
+        )
+
     report = {
-        "pipeline": "Churn Prediction MLOps",
-        "failure_injection": True,
-        "total_tests": 5,
-        "failures_detected": len(failures),
-        "status": (
-            "FAILURES_DETECTED"
-            if failures
-            else "NO_FAILURES_DETECTED"
-        ),
-        "failures": failures
+        "stage": "Failure Handling and Recovery",
+        "repetitions": repetitions,
+        "runs": all_runs,
+        "overall_status": (
+            "PASSED"
+            if all(run["passed"] for run in all_runs)
+            else "FAILED"
+        )
     }
 
+    reports_dir = PROJECT_ROOT / "reports"
+    reports_dir.mkdir(
+        parents=True,
+        exist_ok=True
+    )
+
+    report_path = PROJECT_ROOT / config["paths"]["failure_report"]
+
     with open(
-        FAILURE_REPORT,
+        report_path,
         "w",
         encoding="utf-8"
     ) as f:
@@ -284,22 +353,34 @@ def inject_failures():
             indent=4
         )
 
-    # -----------------------------------------------------
-    # Final output
-    # -----------------------------------------------------
-    print("\n========================================")
-    print("FAILURE INJECTION COMPLETED")
-    print("========================================")
+    if report["overall_status"] == "PASSED":
 
-    print(f"Failures detected : {len(failures)}")
-    print(f"Report saved      : {FAILURE_REPORT}")
-    print(f"Error CSV saved   : {CORRUPTED_REPORT}")
+        print(
+            "\n[SUCCESS] All Lab 9 failure and "
+            "recovery tests PASSED."
+        )
 
-    return report
+        print(
+            f"[INFO] Report saved to {report_path}"
+        )
+
+        return True
+
+    print(
+        "\n[ERROR] One or more Lab 9 "
+        "scenarios FAILED."
+    )
+
+    print(
+        f"[INFO] Report saved to {report_path}"
+    )
+
+    return False
 
 
-# ---------------------------------------------------------
-# Main
-# ---------------------------------------------------------
 if __name__ == "__main__":
-    inject_failures()
+    passed = run_failure_tests()
+
+    sys.exit(
+        0 if passed else 1
+    )

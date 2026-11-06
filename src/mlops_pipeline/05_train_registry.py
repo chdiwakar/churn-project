@@ -1,6 +1,11 @@
 import os
 import sys
 
+os.environ.setdefault("GIT_PYTHON_REFRESH", "quiet")
+git_cmd_dir = r"C:\Program Files\Git\cmd"
+if os.path.exists(git_cmd_dir) and git_cmd_dir not in os.environ.get("PATH", ""):
+    os.environ["PATH"] = git_cmd_dir + os.pathsep + os.environ.get("PATH", "")
+
 import joblib
 import mlflow
 import mlflow.sklearn
@@ -33,7 +38,7 @@ def train_and_register_model():
         y_train = np.load(os.path.join(processed_dir, "y_train.npy"))
         y_test = np.load(os.path.join(processed_dir, "y_test.npy"))
     except FileNotFoundError:
-        print("[ERROR] Processed data not found. Please run 03_preprocessing_mlops.py first.")
+        print("[ERROR] Processed data not found. Please run 03_preprocessing.py first.")
         return False
 
     model_cfg = config["model"]

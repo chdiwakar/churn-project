@@ -47,7 +47,7 @@ def run_inference_demo():
         model = mlflow.sklearn.load_model(model_uri)
     except Exception as exc:
         print(f"[ERROR] Could not load Production model from MLflow: {exc}")
-        print("[ERROR] Run 07_automate_lifecycle_mlops.py first.")
+        print("[ERROR] Run 08_automate_lifecycle.py first.")
         return False
 
     preprocessor_path = config["paths"]["preprocessor"]

@@ -1,24 +1,56 @@
-# LAB 9: Failure Handling and Testing
+# Lab 9 — Pipeline Failure Handling and Recovery
 
-## 1. Objective
-To test the Churn Prediction MLOps pipeline by identifying data-related failures and recording them in reports.
+## Goal
 
-## 2. Failure Scenarios
-- Missing raw dataset
-- Missing target column
-- Missing values in the dataset
-- Invalid target values
-- Duplicate records
+Intentionally break important parts of the existing MLOps pipeline and verify that the system fails safely or recovers through the Model Registry.
 
-## 3. Failure Detection
-The failure injection module checks the dataset for the above conditions and records detected issues.
+## Run locally
 
-## 4. Reports Generated
-- `artifacts/failure_simulation_report.json`
-- `artifacts/corrupted_simulation_errors.csv`
+```bash
+python src/mlops_pipeline/10_failure_injection.py
+```
 
-## 5. Automation
-The GitHub Actions workflow `lab9_failure_tests.yml` runs the failure injection script and verifies that the reports are generated.
+## Scenarios
 
-## 6. Conclusion
-The Lab 9 failure-handling module helps identify data-quality problems and generates reports to support reliable execution of the Churn Prediction MLOps pipeline.
+| Scenario | Expected behavior |
+|---|---|
+| Missing raw dataset | HALT |
+| Invalid datatype | HALT |
+| Schema mismatch | HALT |
+| Corrupted processed output | HALT |
+| Missing local model artifact | Detect failure, recover the Production model from MLflow, then continue |
+
+## Repeated execution
+
+`config.yaml` controls the number of repetitions:
+
+```yaml
+lab9:
+  repetitions: 3
+```
+
+The failure test creates:
+
+```text
+reports/failure_report.json
+```
+
+## Recovery path
+
+```text
+models/churn_model.pkl missing
+            ↓
+model evaluation detects the missing artifact
+            ↓
+load MLflow Production model
+            ↓
+restore local model artifact
+            ↓
+run evaluation again
+            ↓
+success
+```
+
+## Safety behavior
+
+Corrupted input data is not silently repaired by the pipeline. Validation failures stop downstream stages so that bad data does not reach training.
